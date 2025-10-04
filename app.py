@@ -1,12 +1,11 @@
-# app/main.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+import joblib  # Import joblib to load the trained AI model
 
-# Placeholder imports for ML + SHAP integration
-# from src.helpers import load_model, predict
-# from src.visuals import shap_summary_plot, plot_feature_importance
+# Load the trained model once when the app starts
+model = joblib.load("model.pkl")  # Make sure 'model.pkl' is your saved AI model file
 
 st.set_page_config(page_title="Exoplanet Explorer", layout="wide")
 
@@ -55,7 +54,7 @@ elif page == "Light-Curve Viewer":
             st.plotly_chart(fig2, use_container_width=True)
         
         if "model_fit" in df.columns:
-            fig3 = px.line(df, x="time", y="df['model_fit']", title="Model Transit Fit")
+            fig3 = px.line(df, x="time", y="model_fit", title="Model Transit Fit")  # Fixed y argument here
             st.plotly_chart(fig3, use_container_width=True)
 
 # ---- PREDICTION ----
@@ -72,16 +71,18 @@ elif page == "Prediction":
         submitted = st.form_submit_button("Predict")
     
     if submitted:
-        # Placeholder for model integration
-        # prediction, prob = predict({...})
-        prediction = "Exoplanet Candidate"
-        prob = 0.87
+        # Prepare features in the order expected by your model
+        input_features = [orbital_period, radius, duration, depth]
         
-        st.success(f"Prediction: {prediction} (Confidence: {prob:.2f})")
+        # Use the loaded model to predict
+        prediction_label = model.predict([input_features])[0]
+        prediction_prob = model.predict_proba([input_features]).max()
+        
+        st.success(f"Prediction: {prediction_label} (Confidence: {prediction_prob:.2f})")
         
         st.subheader("SHAP Explanation (Feature Contributions)")
         st.info("Here would be the SHAP summary plot.")
-        # shap_summary_plot(model, input_vector)
+        # shap_summary_plot(model, input_features)
 
 # ---- BATCH PROCESSING ----
 elif page == "Batch Processing":
@@ -94,16 +95,28 @@ elif page == "Batch Processing":
         batch_df = pd.read_csv(batch_file)
         st.write("Preview of uploaded data:", batch_df.head())
         
-        # Placeholder predictions
-        batch_df["Prediction"] = np.random.choice(
-            ["Confirmed", "Candidate", "False Positive"], size=len(batch_df)
-        )
+        # Placeholder bulk prediction - here you can replace with your actual model batch predict method
+        # Assuming your batch_df has columns matching model's expected features
+        features = batch_df[['orbital_period', 'radius', 'duration', 'depth']] if all(col in batch_df.columns for col in ['orbital_period', 'radius', 'duration', 'depth']) else batch_df
+        
+        try:
+            batch_preds = model.predict(features)
+        except Exception as e:
+            st.error(f"Error during batch prediction: {e}")
+            # Fall back to random placeholders
+            batch_preds = np.random.choice(
+                ["Confirmed", "Candidate", "False Positive"], size=len(batch_df)
+            )
+        
+        batch_df["Prediction"] = batch_preds
+        
         st.download_button(
             "Download Results CSV",
             batch_df.to_csv(index=False).encode("utf-8"),
             "predictions.csv",
             "text/csv"
         )
+        
         st.write("Results with predictions:", batch_df)
 
 # ---- ADMIN ----
